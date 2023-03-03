@@ -17,8 +17,8 @@
 *  MA  02110-1301  USA
 */
 
-#ifndef _LALSIM_IMR_PHENOMXPHMNEW_H
-#define _LALSIM_IMR_PHENOMXPHMNEW_H
+#ifndef _LALSIM_IMR_PHENOMXPHM_H
+#define _LALSIM_IMR_PHENOMXPHM_H
 
 
 #ifdef __cplusplus
@@ -49,4 +49,4 @@ INT4 check_input_mode_array_Jframe(LALValue *ModeArrayJframe);
 }
 #endif
 
-#endif /* _LALSIM_IMR_PHENOMXPHMNEW_H */
+#endif /* _LALSIM_IMR_PHENOMXPHM_H */
