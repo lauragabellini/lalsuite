@@ -40,7 +40,7 @@ def test_memory_allocation():
     """check memory allocation
     """
 
-    if not lal.MEMORY_FUNCTIONS_DISABLED:
+    if lal.MEMORY_FUNCTIONS_DISABLED:
         pytest.skip("LAL was built with MEMORY_FUNCTIONS_DISABLED")
 
     print("checking memory allocation ...", file=sys.stderr)
@@ -135,7 +135,7 @@ def test_string_conversions():
     strs = ["a", "bc", "def"]
     sv = lal.CreateStringVector(*strs)
     assert sv.length == 3
-    assert (sv.data.astype(numpy.object) == strs).all()
+    assert (sv.data.astype(object) == strs).all()
     strs[0] = "ghijk"
     sv.data[0] = strs[0]
     strs.append("lmnopq")

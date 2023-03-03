@@ -1,5 +1,5 @@
 /*
- * LIGOLwXMLRingdownRead.h
+ * LIGOLwXMLInspiralRead.h
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -17,10 +17,12 @@
  * 02110-1301  USA
  */
 
-#ifndef _LIGOLWXMLRINGDOWNREAD_H
-#define _LIGOLWXMLRINGDOWNREAD_H
+#ifndef _INSPIRALTMPLTBANKFROMLIGOLW_H
+#define _INSPIRALTMPLTBANKFROMLIGOLW_H
 
-#include <lal/LIGOLwXMLRead.h>
+#include <lal/LALDatatypes.h>
+#include <lal/LALInspiral.h>
+#include <lal/LIGOMetadataTables.h>
 
 #ifdef  __cplusplus
 extern "C" {
@@ -30,14 +32,16 @@ extern "C" {
  * function prototypes
  */
 
-SimRingdownTable* XLALSimRingdownTableFromLIGOLw (
-    CHAR               *fileName,
-    INT4                startTime,
-    INT4                stopTime
+int
+InspiralTmpltBankFromLIGOLw (
+    InspiralTemplate   **bankHead,
+    const CHAR         *fileName,
+    INT4                startTmplt,
+    INT4                stopTmplt
     );
 
 #ifdef  __cplusplus
 }
 #endif
 
-#endif /* _LIGOLWXMLRINGDOWNREAD_H */
+#endif /* _INSPIRALTMPLTBANKFROMLIGOLW_H */

@@ -261,8 +261,8 @@ XLALGetSiteInfo ( const CHAR *name )
  */
 int XLALFillSFTFilenameSpecStrings(
   SFTFilenameSpec *spec,            /**< [out] SFT filename specification */
-  const CHAR *path,                 /**< [in] Extension of the SFT file; defaults to 'sft' */
-  const CHAR *extn,                 /**< [in] Path to the SFT file */
+  const CHAR *path,                 /**< [in] Path to the SFT file */
+  const CHAR *extn,                 /**< [in] Extension of the SFT file; defaults to 'sft' */
   const CHAR *detector,             /**< [in] 2-character detector prefix (e.g. 'H1', 'L1', 'V1') */
   const CHAR *window_type,          /**< [in] window function applied to SFT */
   const CHAR *privMisc,             /**< [in] For private SFTs: miscellaneous description field */
@@ -353,8 +353,8 @@ char *XLALBuildSFTFilenameFromSpec(
   XLAL_CHECK_NULL( spec->pubObsRun == 0 || strlen(spec->window_type) > 0, XLAL_EINVAL,
                    "Public SFTs (with pubObsRun=%u) must include a window function 'window_type'",
                    spec->pubObsRun );
-  XLAL_CHECK_NULL( spec->nbFirstBinFreq == 0 || spec->nbBinWidthFreq > 0, XLAL_EINVAL,
-                   "Narrow-band SFTs (with nbFirstBinFreq>0) must have nbBinWidthFreq>0" );
+  XLAL_CHECK_NULL( spec->nbFirstBinFreq == 0 || spec->nbBinWidthFreq > 0 || spec->nbBinWidthRem > 0, XLAL_EINVAL,
+                   "Narrow-band SFTs (with nbFirstBinFreq>0) must have nbBinWidthFreq>0 or nbBinWidthRem>0" );
   XLAL_CHECK_NULL( spec->gpsStart > 0, XLAL_EINVAL,
                    "'gpsStart' must be strictly positive" );
   XLAL_CHECK_NULL( spec->SFTspan > 0, XLAL_EINVAL,
@@ -636,6 +636,34 @@ XLALCheckValidDescriptionField ( const char *desc )
   return XLAL_SUCCESS;
 
 } // XLALCheckValidDescriptionField()
+
+
+/**
+ * Check whether two SFT windows, each defined by a type name and parameter value, match.
+ *
+ * This builds standardized windowspec numbers out of the inputs and compares those,
+ * ensuring consistent rounding before the comparison.
+ */
+int
+XLALCompareSFTWindows (
+    const CHAR *type1,  /**< [in] type name of the first window */
+    const REAL8 param1, /**< [in] parameter value of the first window */
+    const CHAR *type2,  /**< [in] type name of the second window */
+    const REAL8 param2  /**< [in] parameter value of the second window */
+ )
+{
+
+  UINT2 spec1 = 0;
+  UINT2 spec2 = 0;
+
+  XLAL_CHECK( build_sft_windowspec( &spec1, NULL, type1, param1 ) == XLAL_SUCCESS, XLAL_EINVAL, "Failed to build windowspec from type '%s' and param '%f'", type1, param1 );
+  XLAL_CHECK( build_sft_windowspec( &spec2, NULL, type2, param2 ) == XLAL_SUCCESS, XLAL_EINVAL, "Failed to build windowspec from type '%s' and param '%f'", type2, param2 );
+
+  XLAL_CHECK( spec1 == spec2, XLAL_EINVAL );
+
+  return XLAL_SUCCESS;
+
+} // XLALCompareSFTWindows()
 
 
 /**

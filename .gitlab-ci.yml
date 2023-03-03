@@ -61,6 +61,8 @@ include:
   - local: '/.gitlab/ci/compilers.yml'
 
   # build containers
+  - local: '/.gitlab/ci/containers.yml'
+
   # quality checks
   - local: '/.gitlab/ci/lint.yml'
 
@@ -121,13 +123,6 @@ default:
 .configure-coredump: &configure-coredump
   ulimit -S -c 0
 
-# manually triggered and scheduled pipelines should use the
-# `--enable-nightly` configure flag
-.configure-nightly: &configure-nightly-build
-  if [ ${CI_PIPELINE_SOURCE} = "schedule" ] || [ ${CI_PIPELINE_SOURCE} = "web" ]; then
-      export ENABLE_NIGHTLY="--enable-nightly";
-  fi
-
 # basic steps for a job that compiles stuff
 # can be included in the before_script/script sections
 # via `*init-build-job`
@@ -135,7 +130,6 @@ default:
   - *print-env
   - *configure-ccache
   - *configure-coredump
-  - *configure-nightly-build
 
 # simple bash command to retry a stage up to 3 times
 # with a 15-second delay (mainly to survive transient
@@ -287,7 +281,9 @@ default:
           echo "Requires:" &&
           rpm -qp --requires "${rpmf}";
       done
-    # lint RPMs
+    # install the packages we built
+    - yum -y -q install ${CI_PROJECT_DIR}/rpmbuild/RPMS/*/*${PACKAGE}-*.rpm
+    # lint packages (both installed packages and RPM files)
     - |
       cat << EOF > rpmlintrc
       # don't validate Source0
@@ -300,6 +296,7 @@ default:
       EOF
     - rpmlint
           -f rpmlintrc
+          "*${PACKAGE}*"
           ${CI_PROJECT_DIR}/rpmbuild/RPMS/*/*${PACKAGE}-*.rpm
   artifacts:
     expire_in: 18h
@@ -1108,50 +1105,50 @@ lalapps:conda:py39:
     # explicitly use the oldest macOS tag we have
     - macos_monterey_arm64
 
-# wheel build using the manylinux2014_x86_64 container
-.wheel:manylinux2014_x86_64:
+# wheel build using the manylinux_2_28_x86_64 container
+.wheel:manylinux_2_28_x86_64:
   extends:
     - .wheel:manylinux
-  image: containers.ligo.org/lscsoft/lalsuite-manylinux/manylinux2014_x86_64
+  image: containers.ligo.org/lscsoft/lalsuite-manylinux/manylinux_2_28_x86_64
 
-# wheel build using the manylinux2014_aarch64 container
-.wheel:manylinux2014_aarch64:
+# wheel build using the manylinux_2_28_aarch64 container
+.wheel:manylinux_2_28_aarch64:
   extends:
     - .wheel:manylinux
-  image: containers.ligo.org/lscsoft/lalsuite-manylinux/manylinux2014_aarch64
+  image: containers.ligo.org/lscsoft/lalsuite-manylinux/manylinux_2_28_aarch64
   tags:
     - aarch64
 
 # Build wheels for all supported platforms
-wheel:cp38-cp38-manylinux2014_x86_64:
+wheel:cp38-cp38-manylinux_2_28_x86_64:
   extends:
-    - .wheel:manylinux2014_x86_64
-wheel:cp39-cp39-manylinux2014_x86_64:
+    - .wheel:manylinux_2_28_x86_64
+wheel:cp39-cp39-manylinux_2_28_x86_64:
   extends:
-    - .wheel:manylinux2014_x86_64
-wheel:cp310-cp310-manylinux2014_x86_64:
+    - .wheel:manylinux_2_28_x86_64
+wheel:cp310-cp310-manylinux_2_28_x86_64:
   extends:
-    - .wheel:manylinux2014_x86_64
-wheel:cp311-cp311-manylinux2014_x86_64:
+    - .wheel:manylinux_2_28_x86_64
+wheel:cp311-cp311-manylinux_2_28_x86_64:
   extends:
-    - .wheel:manylinux2014_x86_64
+    - .wheel:manylinux_2_28_x86_64
   rules:  # reference build for this platform
     - !reference [.ci-wheels, rules]
     - !reference [.ci-merge-build, rules]
     - !reference [.ci-lalsuite-tag-build, rules]
     - !reference [.ci-nightly-deploy, rules]
-wheel:cp38-cp38-manylinux2014_aarch64:
+wheel:cp38-cp38-manylinux_2_28_aarch64:
   extends:
-    - .wheel:manylinux2014_aarch64
-wheel:cp39-cp39-manylinux2014_aarch64:
+    - .wheel:manylinux_2_28_aarch64
+wheel:cp39-cp39-manylinux_2_28_aarch64:
   extends:
-    - .wheel:manylinux2014_aarch64
-wheel:cp310-cp310-manylinux2014_aarch64:
+    - .wheel:manylinux_2_28_aarch64
+wheel:cp310-cp310-manylinux_2_28_aarch64:
   extends:
-    - .wheel:manylinux2014_aarch64
-wheel:cp311-cp311-manylinux2014_aarch64:
+    - .wheel:manylinux_2_28_aarch64
+wheel:cp311-cp311-manylinux_2_28_aarch64:
   extends:
-    - .wheel:manylinux2014_aarch64
+    - .wheel:manylinux_2_28_aarch64
   rules:  # reference build for this platform
     - !reference [.ci-wheels, rules]
     - !reference [.ci-merge-build, rules]
@@ -1237,7 +1234,7 @@ wheel:cp311-cp311-macosx-arm64:
       gpgcheck=0
       EOF
     # install required packages
-    - yum -y -q install lal* liblal*-devel python*-lal* --exclude lalsuite* --exclude lalapps
+    - yum -y install "lal*" "liblal*-devel" "python*-lal*" --exclude "lalsuite*" --exclude lalapps --exclude "*lalpulsar*"
 
 lalinference_testjob:
   extends:
@@ -1510,139 +1507,6 @@ platform:conda:macos-arm64:
     - .platform-test:conda
     - .macos-arm64
 
-# -- docker -------------------------------------
-#
-# Build docker images that include the
-# latest build outputs
-#
-
-# job template for docker builds
-.docker:
-  image: docker:latest
-  variables:
-    DOCKER_DRIVER: overlay
-  stage: docker
-  script:
-    # build container and push to registry
-    - IMAGE_TAG=${CI_JOB_NAME##*:}
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build --pull -t ${IMAGE_NAME}:${IMAGE_TAG} --file ${DOCKER_FILE} .
-    - docker push ${IMAGE_NAME}:${IMAGE_TAG}
-
-.docker:nightly:
-  extends:
-    - .docker
-  variables:
-    IMAGE_NAME: "$CI_REGISTRY_IMAGE/nightly"
-  rules:
-    - !reference [.ci-nightly-deploy, rules]
-
-.docker:tags:
-  extends:
-    - .docker
-  variables:
-    IMAGE_NAME: "$CI_REGISTRY_IMAGE/$CI_COMMIT_TAG"
-  rules:
-    - !reference [.ci-tag-build, rules]
-
-# template for RHEL docker builds
-.docker:el:
-  extends:
-    - .docker
-  variables:
-    DOCKER_FILE: ".gitlab-ci-el7.Dockerfile"
-  before_script:
-    - set -x
-    # add RPMs to directory to pass to docker
-    - mkdir rpms && mv rpmbuild/RPMS/*/*.rpm rpms
-    - rm -rf rpmbuild*
-  needs:
-    - lal:rpm
-    - lalframe:rpm
-    - lalmetaio:rpm
-    - lalsimulation:rpm
-    - lalburst:rpm
-    - lalinspiral:rpm
-    - lalinference:rpm
-    - lalpulsar:rpm
-    - lalapps:rpm
-
-# template for Debian docker builds
-.docker:debian:
-  extends:
-    - .docker
-  variables:
-    DOCKER_FILE: ".gitlab-ci-bullseye.Dockerfile"
-  before_script:
-    - set -x
-    # add deb packages to directory to pass to docker
-    - mkdir debs && mv *.deb debs
-    - rm *.changes *.dsc *.orig.*
-  needs:
-    - lal:deb
-    - lalframe:deb
-    - lalmetaio:deb
-    - lalsimulation:deb
-    - lalburst:deb
-    - lalinspiral:deb
-    - lalinference:deb
-    - lalpulsar:deb
-    - lalapps:deb
-
-# template for Koji docker builds
-.docker:koji:
-  extends:
-    - .docker
-  variables:
-    DOCKER_FILE: ".gitlab-ci-koji.Dockerfile"
-  needs:
-    - lal:koji
-    - lalframe:koji
-    - lalmetaio:koji
-    - lalsimulation:koji
-    - lalburst:koji
-    - lalinspiral:koji
-    - lalpulsar:koji
-    - lalinference:koji
-    - lalapps:koji
-  rules:
-    - !reference [.ci-koji, rules]
-    - !reference [.ci-nightly-deploy, rules]
-
-# build a nightly container from the RPMs
-docker:nightly:el7:
-  extends:
-    - .docker:el
-    - .docker:nightly
-  rules:
-    - !reference [.ci-docker, rules]
-
-# build a tagged container from the rpms
-docker:tags:el7:
-  extends:
-    - .docker:el
-    - .docker:tags
-
-# build a nightly container for Debian bullseye
-docker:nightly:bullseye:
-  extends:
-    - .docker:debian
-    - .docker:nightly
-  rules:
-    - !reference [.ci-docker, rules]
-
-# build a tagged container for Debian bullseye
-docker:tags:bullseye:
-  extends:
-    - .docker:debian
-    - .docker:tags
-
-# build a nightly containers from the koji rpms
-docker:nightly:el7-koji:
-  extends:
-    - .docker:koji
-    - .docker:nightly
-
 # -- coverage ---------------------------------
 #
 # Measure test coverage
@@ -1756,16 +1620,21 @@ wheel:pypi:
   script:
     # TWINE_USERNAME and TWINE_PASSWORD are provided by CI secret variables
     - pip install twine
+    - |
+      if [ "X${DEPLOY_DRY_RUN}" = "Xyes" ]; then
+        echo "Skipping rest of job as DEPLOY_DRY_RUN='${DEPLOY_DRY_RUN}'"
+        exit 100
+      fi
     - twine upload wheelhouse/*
   needs:
-    - wheel:cp38-cp38-manylinux2014_x86_64
-    - wheel:cp39-cp39-manylinux2014_x86_64
-    - wheel:cp310-cp310-manylinux2014_x86_64
-    - wheel:cp311-cp311-manylinux2014_x86_64
-    - wheel:cp38-cp38-manylinux2014_aarch64
-    - wheel:cp39-cp39-manylinux2014_aarch64
-    - wheel:cp310-cp310-manylinux2014_aarch64
-    - wheel:cp311-cp311-manylinux2014_aarch64
+    - wheel:cp38-cp38-manylinux_2_28_x86_64
+    - wheel:cp39-cp39-manylinux_2_28_x86_64
+    - wheel:cp310-cp310-manylinux_2_28_x86_64
+    - wheel:cp311-cp311-manylinux_2_28_x86_64
+    - wheel:cp38-cp38-manylinux_2_28_aarch64
+    - wheel:cp39-cp39-manylinux_2_28_aarch64
+    - wheel:cp310-cp310-manylinux_2_28_aarch64
+    - wheel:cp311-cp311-manylinux_2_28_aarch64
     - wheel:cp38-cp38-macosx-x86_64
     - wheel:cp39-cp39-macosx-x86_64
     - wheel:cp310-cp310-macosx-x86_64
@@ -1777,3 +1646,5 @@ wheel:pypi:
   rules:
     - !reference [.ci-lalsuite-tag-build, rules]
     - !reference [.ci-nightly-deploy, rules]
+  allow_failure:
+    exit_codes: 100   # DEPLOY_DRY_RUN=yes
